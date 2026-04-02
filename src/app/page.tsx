@@ -1,253 +1,171 @@
 "use client";
 
 import { useState } from "react";
-import { generateText } from "ai";
-import { deepseek } from "@ai-sdk/deepseek";
 
-function getDeepSeekClient() {
-  return deepseek("deepseek-chat");
-}
+const ACCENT = "violet";
 
-type Field = { label: string; key: string; type: string; placeholder: string; required?: boolean };
-type Section = { title: string; fields: Field[] };
-
-const SECTIONS: Section[] = [
-  {
-    title: "Property Information",
-    fields: [
-      { label: "Property Address", key: "address", type: "text", placeholder: "123 Main St, City, State ZIP", required: true },
-      { label: "Parcel Number (Tax ID)", key: "parcel", type: "text", placeholder: "e.g., 123-45-678" },
-      { label: "Current Zoning Designation", key: "zoning", type: "text", placeholder: "e.g., R-1 Single Family Residential", required: true },
-    ],
-  },
-  {
-    title: "Variance Request",
-    fields: [
-      { label: "Variance Type", key: "varianceType", type: "select", placeholder: "Select type..." },
-      { label: "Specific Dimension/Requirement Affected", key: "requirement", type: "text", placeholder: "e.g., Rear yard setback of 25ft required, requesting 15ft" },
-      { label: "Current Non-Compliant Dimension", key: "currentDim", type: "text", placeholder: "e.g., Current setback is 10ft" },
-      { label: "Requested Dimension", key: "requestedDim", type: "text", placeholder: "e.g., Requesting 15ft setback" },
-    ],
-  },
-  {
-    title: "Project & Hardship",
-    fields: [
-      { label: "Project Description", key: "projectDesc", type: "textarea", placeholder: "Describe your proposed project...", required: true },
-      { label: "Why Does Current Zoning Create Hardship?", key: "hardship", type: "textarea", placeholder: "Explain the unique hardship the current zoning creates...", required: true },
-    ],
-  },
-  {
-    title: "Neighborhood Context",
-    fields: [
-      { label: "Existing Neighborhood Character", key: "neighborhood", type: "textarea", placeholder: "Describe the existing neighborhood character and context..." },
-      { label: "How Will Variance Impact Neighborhood?", key: "impact", type: "textarea", placeholder: "Explain potential impacts on the neighborhood..." },
-    ],
-  },
-  {
-    title: "Supporting Materials",
-    fields: [
-      { label: "Supporting Documentation Available", key: "docs", type: "text", placeholder: "e.g., Survey, site plan, architect drawings, photos" },
-      { label: "Prior Variance Applications (if any)", key: "priorVariance", type: "textarea", placeholder: "Any prior variance requests on this property..." },
-    ],
-  },
-];
-
-const VARIANCE_OPTIONS = ["Area Variance (dimensional)", "Use Variance", "Mixed (Area + Use)"];
-
-export default function ZoningVariancePage() {
-  const [formData, setFormData] = useState<Record<string, string>>({});
-  const [output, setOutput] = useState<string>("");
+export default function ZoningVarianceGenerator() {
+  const [form, setForm] = useState({
+    propertyAddress: "",
+    currentZoning: "",
+    proposedUse: "",
+    varianceType: "area",
+    neighborhoodContext: "",
+  });
+  const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState(0);
+  const [error, setError] = useState("");
 
-  const handleChange = (key: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement | HTMLSelectElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleGenerate = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setOutput("");
+    setError("");
     try {
-      const { text } = await generateText({
-        model: getDeepSeekClient(),
-        prompt: `You are an expert land use attorney and planning professional. Generate a complete, professional zoning variance application package for presentation to a planning commission or board of adjustment.
-
-Use the following property and request information:
-${Object.entries(formData)
-  .map(([k, v]) => `${k}: ${v}`)
-  .join("\n")}
-
-Generate a comprehensive zoning variance application package containing ALL of the following sections, formatted as professional government/legal documents:
-
-# VARIANCE APPLICATION PACKAGE
-
-## 1. APPLICATION COVER SHEET
-Include: property address, parcel number, current zoning, variance type requested, applicant name placeholder, date, and all relevant identifiers.
-
-## 2. NARRATIVE JUSTIFICATION
-Write a compelling, legally-sound narrative explaining why the variance should be granted. Reference the applicable legal standards for variance approval (undue hardship, unique circumstances, not self-created, public interest preserved, spirit of ordinance observed). Be persuasive but professional.
-
-## 3. HARDSHIP ANALYSIS
-Analyze the hardship under the accepted legal standard:
-- Unique physical circumstances of the property
-- How circumstances deprive the property of privileges enjoyed by other properties in the same zone
-- Why the hardship is NOT self-created
-- Why the variance is the minimum deviation necessary
-
-## 4. NEIGHBORHOOD IMPACT ASSESSMENT
-Write a professional assessment of how the requested variance:
-- Does or does not affect adjacent property values
-- Relates to the character of the surrounding area
-- Impacts traffic, parking, and public services
-- Is consistent with the general character of the neighborhood
-
-## 5. SITE PLAN DESCRIPTION
-Generate a professional site plan description that could accompany a submitted site plan. Include: setback dimensions, lot coverage, building envelope, impervious surface ratio, and all relevant measurements.
-
-## 6. COMPREHENSIVE PLAN CONSISTENCY MEMORANDUM
-Write a memo explaining how the requested variance is consistent with the jurisdiction's comprehensive plan goals and policies. Reference relevant general plan elements (land use, housing, neighborhood character, etc.).
-
-## 7. PUBLIC HEARING TESTIMONY OUTLINE
-Provide a structured outline for oral testimony at the public hearing:
-- Opening statement (2-3 minutes)
-- Key points to emphasize
-- Anticipated objections and responses
-- Supporting evidence to reference
-- Closing statement
-
-## 8. EXHIBIT AND ATTACHMENT CHECKLIST
-Create a comprehensive checklist of all exhibits and attachments that should accompany the application:
-- Required exhibits
-- Recommended exhibits
-- Optional but beneficial exhibits
-- Pre-submission verification checklist
-
-Format all sections with clear headers, professional language, and enough detail to be immediately usable by an applicant presenting to a planning commission.`,
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            {
+              role: "user",
+              content: `You are an expert municipal planning and zoning attorney. Generate a complete zoning variance application and hearing preparation package.\n\nPROPERTY ADDRESS: ${form.propertyAddress}\nCURRENT ZONING: ${form.currentZoning}\nPROPOSED USE: ${form.proposedUse}\nVARIANCE TYPE: ${form.varianceType}\nNEIGHBORHOOD CONTEXT: ${form.neighborhoodContext}\n\nVariance type: ${form.varianceType === "area" ? "Area variance (dimensional/physical)" : "Use variance (change of use)"}\n\nGenerate the following clearly labeled sections:\n1. ZONING ANALYSIS (analysis of current zoning code, what specific regulation requires a variance, why strict application would cause practical difficulty or unnecessary hardship)\n2. VARIANCE APPLICATION NARRATIVE (compelling written narrative for the planning/zoning board: describe the property, the hardship, why the variance is the minimum necessary, and how it will not adversely affect neighboring properties)\n3. COMPLIANCE CHECKLIST (comprehensive checklist confirming compliance with all applicable zoning requirements beyond the variance — parking, setbacks, height, FAR, etc.)\n4. NEIGHBOR NOTIFICATION TEMPLATE (draft notification letter to adjacent property owners for the required public hearing notice, including hearing date/place placeholder)\n5. HEARING PREPARATION NOTES (key talking points, anticipated objections and responses, who should attend, what evidence to bring, presentation tips for the zoning board hearing)\n\nUse precise zoning law terminology and procedural requirements.`,
+            },
+          ],
+          max_tokens: 3000,
+          temperature: 0.7,
+        }),
       });
-      setOutput(text);
-    } catch (err) {
-      setOutput(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      setOutput(data.choices?.[0]?.message?.content || "No output received.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const currentFields = SECTIONS[activeSection]?.fields || [];
+  const accentStyles: Record<string, { border: string; bg: string; text: string; heading: string; gradient: string }> = {
+    violet: { border: "border-violet-500", bg: "bg-violet-500/10", text: "text-violet-300", heading: "text-violet-400", gradient: "linear-gradient(to right, #7c3aed, #6d28d9)" },
+    blue: { border: "border-blue-500", bg: "bg-blue-500/10", text: "text-blue-300", heading: "text-blue-400", gradient: "linear-gradient(to right, #2563eb, #1d4ed8)" },
+    green: { border: "border-green-500", bg: "bg-green-500/10", text: "text-green-300", heading: "text-green-400", gradient: "linear-gradient(to right, #16a34a, #15803d)" },
+    amber: { border: "border-amber-500", bg: "bg-amber-500/10", text: "text-amber-300", heading: "text-amber-400", gradient: "linear-gradient(to right, #d97706, #b45309)" },
+    rose: { border: "border-rose-500", bg: "bg-rose-500/10", text: "text-rose-300", heading: "text-rose-400", gradient: "linear-gradient(to right, #e11d48, #be123c)" },
+    teal: { border: "border-teal-500", bg: "bg-teal-500/10", text: "text-teal-300", heading: "text-teal-400", gradient: "linear-gradient(to right, #0d9488, #0f766e)" },
+    cyan: { border: "border-cyan-500", bg: "bg-cyan-500/10", text: "text-cyan-300", heading: "text-cyan-400", gradient: "linear-gradient(to right, #0891b2, #0e7490)" },
+    orange: { border: "border-orange-500", bg: "bg-orange-500/10", text: "text-orange-300", heading: "text-orange-400", gradient: "linear-gradient(to right, #ea580c, #c2410c)" },
+    pink: { border: "border-pink-500", bg: "bg-pink-500/10", text: "text-pink-300", heading: "text-pink-400", gradient: "linear-gradient(to right, #db2777, #be185d)" },
+  };
+
+  const s = accentStyles[ACCENT];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] to-[#1a1a2e] text-white">
-      <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-950 to-gray-900 text-white">
+      <div className="max-w-4xl mx-auto px-4 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-purple-400 mb-1">Zoning Variance Application Generator</h1>
-          <p className="text-gray-400 text-sm">Prepare complete, professional variance applications for planning commissions</p>
+          <h1 className={`text-3xl font-bold ${s.heading} mb-2`}>
+            🏠 AI Municipal Code Compliance & Zoning Variance Report
+          </h1>
+          <p className="text-gray-400">
+            Generate zoning variance applications, compliance checklists, neighbor
+            notifications, and hearing prep notes — powered by DeepSeek.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Form */}
-          <div className="bg-[#12122a] border border-purple-900/40 rounded-xl p-6">
-            {/* Section tabs */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              {SECTIONS.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveSection(i)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    activeSection === i
-                      ? "bg-purple-600 text-white"
-                      : "bg-[#1a1a2e] text-gray-400 hover:text-white border border-gray-700"
-                  }`}
-                >
-                  {s.title}
-                </button>
-              ))}
+        <form onSubmit={handleSubmit} className="space-y-5 mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Property Address</label>
+              <input
+                name="propertyAddress"
+                value={form.propertyAddress}
+                onChange={handleChange}
+                placeholder="e.g., 142 Oak Street, Springfield"
+                required
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
             </div>
-
-            {/* Fields */}
-            <div className="space-y-4">
-              {SECTIONS[activeSection].title === "Variance Request" && activeSection === 1 && (
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Variance Type *</label>
-                  <select
-                    className="w-full bg-[#1a1a2e] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                    value={formData.varianceType || ""}
-                    onChange={(e) => handleChange("varianceType", e.target.value)}
-                  >
-                    <option value="">Select type...</option>
-                    {VARIANCE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-              )}
-              {currentFields.map((field) => {
-                if (SECTIONS[activeSection].title === "Variance Request" && field.key === "varianceType") return null;
-                return (
-                  <div key={field.key}>
-                    <label className="block text-xs text-gray-400 mb-1">
-                      {field.label} {field.required && <span className="text-purple-400">*</span>}
-                    </label>
-                    {field.type === "textarea" ? (
-                      <textarea
-                        className="w-full bg-[#1a1a2e] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none resize-y"
-                        rows={4}
-                        placeholder={field.placeholder}
-                        value={formData[field.key] || ""}
-                        onChange={(e) => handleChange(field.key, e.target.value)}
-                      />
-                    ) : (
-                      <input
-                        type="text"
-                        className="w-full bg-[#1a1a2e] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                        placeholder={field.placeholder}
-                        value={formData[field.key] || ""}
-                        onChange={(e) => handleChange(field.key, e.target.value)}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Current Zoning</label>
+              <input
+                name="currentZoning"
+                value={form.currentZoning}
+                onChange={handleChange}
+                placeholder="e.g., R-2 (Single-Family Residential)"
+                required
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
             </div>
-
-            {/* Nav */}
-            <div className="flex justify-between mt-6">
-              <button
-                onClick={() => setActiveSection((s) => Math.max(0, s - 1))}
-                disabled={activeSection === 0}
-                className="px-4 py-2 rounded-lg text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-30 transition-all"
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Variance Type</label>
+              <select
+                name="varianceType"
+                value={form.varianceType}
+                onChange={handleChange}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
               >
-                ← Back
-              </button>
-              {activeSection < SECTIONS.length - 1 ? (
-                <button
-                  onClick={() => setActiveSection((s) => s + 1)}
-                  className="px-4 py-2 rounded-lg text-sm bg-purple-600 hover:bg-purple-500 transition-all"
-                >
-                  Next →
-                </button>
-              ) : (
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading}
-                  className="px-6 py-2 rounded-lg text-sm bg-purple-600 hover:bg-purple-500 disabled:opacity-50 transition-all font-medium"
-                >
-                  {loading ? "Generating..." : "Generate Application"}
-                </button>
-              )}
+                <option value="area">Area Variance (dimensional/setback)</option>
+                <option value="use">Use Variance (change of use)</option>
+              </select>
             </div>
           </div>
 
-          {/* Output */}
-          <div className="bg-[#12122a] border border-purple-900/40 rounded-xl p-6">
-            <h2 className="text-sm font-semibold text-purple-300 mb-4">Generated Application Package</h2>
-            {output ? (
-              <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-gray-200 overflow-y-auto max-h-[600px]">
-                {output}
-              </div>
-            ) : (
-              <div className="text-gray-500 text-sm italic mt-8 text-center">
-                Fill in the form and click &quot;Generate Application&quot; to produce a complete variance application package.
-              </div>
-            )}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Proposed Use / Development</label>
+            <textarea
+              name="proposedUse"
+              value={form.proposedUse}
+              onChange={handleChange}
+              placeholder="Describe what you want to do: build a garage closer to the property line, add an accessory dwelling unit, convert to a home business, etc..."
+              rows={4}
+              required
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
           </div>
-        </div>
+
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Neighborhood Context</label>
+            <textarea
+              name="neighborhoodContext"
+              value={form.neighborhoodContext}
+              onChange={handleChange}
+              placeholder="Describe the surrounding area: neighboring land uses, zoning of adjacent parcels, any relevant history or context..."
+              rows={4}
+              required
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ background: loading ? "#374151" : s.gradient }}
+            className="w-full py-3 rounded-lg font-semibold text-white transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? "Generating..." : "Generate Zoning Variance Package"}
+          </button>
+
+          {error && (
+            <div className="border border-red-500 bg-red-500/10 text-red-300 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+        </form>
+
+        {output && (
+          <div className={`border ${s.border} ${s.bg} rounded-xl p-6`}>
+            <h2 className={`text-xl font-bold ${s.heading} mb-4`}>Generated Output</h2>
+            <pre className="whitespace-pre-wrap text-gray-200 text-sm font-mono leading-relaxed">
+              {output}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
